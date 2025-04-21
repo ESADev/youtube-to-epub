@@ -1,0 +1,29 @@
+Metadata-Version: 2.4
+Name: yt2epub
+Version: 1.0.0
+Summary: Convert YouTube videos into EPUBs with AI transcription, formatting, and cover generation.
+Author: Mahmud Esad Yazar
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: MIT License
+Requires-Python: >=3.8
+License-File: LICENSE
+Requires-Dist: yt_dlp
+Requires-Dist: faster-whisper
+Requires-Dist: google-generativeai
+Requires-Dist: diffusers
+Requires-Dist: transformers
+Requires-Dist: torch
+Requires-Dist: ebooklib
+Requires-Dist: Pillow
+Requires-Dist: tk
+Requires-Dist: tkinterdnd2
+Requires-Dist: llama-cpp-python
+Requires-Dist: safetensors
+Requires-Dist: huggingface-hub
+Requires-Dist: python-dotenv
+Dynamic: author
+Dynamic: classifier
+Dynamic: license-file
+Dynamic: requires-dist
+Dynamic: requires-python
+Dynamic: summary

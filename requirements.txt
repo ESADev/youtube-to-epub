@@ -1,0 +1,14 @@
+yt_dlp
+faster-whisper
+google-generativeai
+diffusers
+transformers
+torch
+ebooklib
+Pillow
+tk
+tkinterdnd2
+llama-cpp-python
+safetensors
+huggingface-hub
+python-dotenv

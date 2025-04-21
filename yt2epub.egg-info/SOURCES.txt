@@ -1,0 +1,11 @@
+LICENSE
+README.md
+setup.py
+yt2epub/__init__.py
+yt2epub/main.py
+yt2epub.egg-info/PKG-INFO
+yt2epub.egg-info/SOURCES.txt
+yt2epub.egg-info/dependency_links.txt
+yt2epub.egg-info/entry_points.txt
+yt2epub.egg-info/requires.txt
+yt2epub.egg-info/top_level.txt

@@ -1,0 +1,49 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+env/
+venv/
+ENV/
+
+# Environment variables
+.env
+
+# Output files
+Outputs/
+*.epub
+cover.png
+
+# Model caches and checkpoints
+*.safetensors
+*.ckpt
+*.pth
+*.bin
+*.gguf
+.DS_Store
+*.log
+
+# Temp files
+*.tmp
+*.temp
+*.bak
+*.swp
+*.~*
+tmp/
+temp/
+~$*
+
+# OS-specific
+Thumbs.db
+ehthumbs.db
+Icon?
+desktop.ini
+
+# VSCode config
+.vscode/
+
+# Jupyter checkpoints (if used)
+.ipynb_checkpoints/

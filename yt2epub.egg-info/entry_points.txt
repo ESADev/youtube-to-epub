@@ -1,0 +1,2 @@
+[console_scripts]
+yt2epub = yt2epub.main:launch
