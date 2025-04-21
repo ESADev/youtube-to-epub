@@ -6,10 +6,10 @@
 
 This tool is a great way to reduce passive screen time and shift your YouTube consumption into a more mindful, readable format.
 
-# 📖 YouTube ➜ EPUB AI Converter
+# 📖 yt2epub — YouTube ➜ EPUB AI Converter
 
 Transform YouTube videos into beautiful, ready-to-read eBooks (EPUB format) with AI-generated covers — in just one click.  
-No gray rectangles in your Play Books anymore. Just clean, structured reading with a shelf-ready aesthetic.
+No overstimulation anymore. Just clean, value-focused, structured reading with a shelf-ready aesthetic.
 
 ---
 
@@ -19,6 +19,7 @@ No gray rectangles in your Play Books anymore. Just clean, structured reading wi
 - ✍️ Automatically turns speech into a **structured Markdown book** with headings, paragraphs, and natural flow using **Gemini**
 - 🎨 Uses the book's theme to generate an **AI cover image** (via SDXL) with **customized text colors**
 - 📘 Packages everything into an **EPUB** file — perfect for e-readers like Google Play Books, Kindle (via Calibre), or tablets
+- 🔁 Includes batch processing: drop multiple links, get multiple books
 
 ---
 
@@ -39,9 +40,9 @@ No gray rectangles in your Play Books anymore. Just clean, structured reading wi
 ### 💻 Installation
 
 ```bash
-git clone https://github.com/yourname/youtube-to-epub-ai
-cd youtube-to-epub-ai
-pip install -r requirements.txt
+git clone https://github.com/yourname/yt2epub
+cd yt2epub
+pip install -e .
 ```
 
 You’ll also need to download:
@@ -52,7 +53,7 @@ You’ll also need to download:
 - **Base model**:  
   `stabilityai/stable-diffusion-xl-base-1.0`
 
-Put both inside a local folder (e.g., `D:/AI/models/`)
+Put both inside a local folder (e.g., `models/`)
 
 ---
 
@@ -61,10 +62,10 @@ Put both inside a local folder (e.g., `D:/AI/models/`)
 This app uses **Gemini** for book structure and cover prompt generation.  
 You **must provide your own key**.
 
-#### Create a `.env` file or set it in code:
+#### Add it in a `.env` file:
 
-```bash
-export GOOGLE_API_KEY=your-key-here
+```
+GOOGLE_API_KEY=your-api-key-here
 ```
 
 Or hardcode it (not recommended for public use):
@@ -77,6 +78,8 @@ genai.configure(api_key="YOUR_API_KEY_HERE")
 
 ### 🧪 Dependencies
 
+Included in `setup.py`, but for reference:
+
 - `yt_dlp`
 - `faster_whisper`
 - `google-generativeai`
@@ -86,13 +89,16 @@ genai.configure(api_key="YOUR_API_KEY_HERE")
 - `tkinter`, `tkinterdnd2`
 - `llama-cpp-python` (optional)
 - `safetensors`, `huggingface_hub`
+- `python-dotenv`
 
 ---
 
-### 🧰 Usage
+### 🧰 Usage (CLI)
+
+Once installed, run:
 
 ```bash
-python main.py
+yt2epub
 ```
 
 Then:
