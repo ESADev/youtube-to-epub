@@ -5,8 +5,8 @@ DEFAULT_PUBLISHER  = "Esadev"
 DEFAULT_LANGUAGE   = "en"
 DEFAULT_OUT_NAME   = "my_book"
 COVER_H, COVER_W   = 768, 512          # 3:2 vertical, tiny thumbnail size
-DEFAULT_TEXT_COLOR = "white"     
-DEFAULT_STROKE_COLOR = "black"    
+DEFAULT_TEXT_COLOR = "dimgray"     
+DEFAULT_STROKE_COLOR = "white"    
 # ────────────────────────────────────── #
 
 import threading
@@ -30,6 +30,9 @@ from huggingface_hub import hf_hub_download
 from safetensors.torch import load_file
 from PIL import ImageOps
 from dotenv import load_dotenv
+from youtube_transcript_api import YouTubeTranscriptApi
+import numpy as np
+import webbrowser
 
 load_dotenv()
 
@@ -114,7 +117,7 @@ def download_audio(youtube_url: str) -> str:
 
 def transcribe_wav(wav_path: str) -> str:
     def run_model(model_name, device):
-        cmd = ["python", "utils/whisper_worker.py", model_name, wav_path, device]
+        cmd = ["python", "yt2epub/utils/whisper_worker.py", model_name, wav_path, device]
         result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8")
         if result.returncode != 0:
             raise RuntimeError(result.stderr)
@@ -230,7 +233,7 @@ Inside the code block:
 
 Use headings consistently:
 
-    # (Heading 1) exclusively for the YouTube video title provided.
+    # (Heading 1) exclusively for the book title (decide a concise and good book title based on context, less than 7 words is better).
 
     ## (Heading 2) for chapters or main topic titles.
 
@@ -269,8 +272,6 @@ Important
     • Follow every instruction exactly—this prompt is self‑contained.
     • Output nothing outside the single Markdown code block.
 
-Extract the YouTube video title from the provided link and use it as the main title (# Heading 1):
-Video link: {link}
 
 --- BEGIN TRANSCRIPT ---
 {raw_text}
@@ -324,20 +325,28 @@ def prompt_from_text(title: str, raw: str) -> str: # Fallback image gen prompt g
 
 def generate_cover(prompt: str, path: str, title: str, text_color: str, stroke_color: str):
     """
-    Generates a SD image, overlays the book title in the centre,
-    saves to *path* (PNG).  Uses a basic built‑in font if no TTF found.
+    Generates a cover image. If the "Skip AI Image Generation" checkbox is selected,
+    it generates a light gray gradient image instead of using AI-generated images.
+    Overlays the book title in the center and saves to *path* (PNG).
     """
 
-    # 1) Make fresh SD image --------------------------------------------------
+    # 1) Generate image --------------------------------------------------
     if os.path.exists(path):
         os.remove(path)
-    img = generate_cover_image(prompt, path)
+
+    if skip_ai_image_var.get():
+        print("[AI Skip] Generating light gray gradient image")
+        generate_light_gray_gradient_image(path)
+    else:
+        img = generate_cover_image(prompt, path)
 
     # 2) Overlay title text ---------------------------------------------------
+    img = Image.open(path)
     draw = ImageDraw.Draw(img)
+
     # Try a nicer font if available, else fall back to default PIL bitmap font
     try:
-        font = ImageFont.truetype("Font.ttf", size=int(COVER_H * 0.1))
+        font = ImageFont.truetype("assets/Font.ttf", size=int(COVER_H * 0.1))
     except IOError:
         font = ImageFont.load_default()
 
@@ -356,7 +365,6 @@ def generate_cover(prompt: str, path: str, title: str, text_color: str, stroke_c
     total_h = line_h * len(lines)          #  keeps for later if you still need it
     y        = int(COVER_H * 0.08)         #  8 % down from the top edge
 
-
     # draw each wrapped line with white outline + black fill
     stroke = max(1, font.size // 25 + 1)          # ≈25 % of font size
     for ln in lines:
@@ -371,9 +379,17 @@ def generate_cover(prompt: str, path: str, title: str, text_color: str, stroke_c
         # or: line_gap = 6          #  fixed 6‑pixel gap
         y += line_h + line_gap
 
-
     # 3) Save & return ---------------------------------------------------------
     img.save(path)
+
+def generate_light_gray_gradient_image(save_path: str):
+    """Generates a light gray gradient image using Perlin noise."""
+    width, height = COVER_W, COVER_H
+    gradient = np.linspace(200, 240, width, dtype=np.uint8)  # Light gray gradient
+    image = np.tile(gradient, (height, 1))
+    img = Image.fromarray(image, mode="L").convert("RGB")
+    img.save(save_path)
+    print(f"[Gradient] Light gray gradient image saved to {save_path}")
 
 # ─── EPUB builder ────────────────────────────────────────────────── #
 
@@ -449,6 +465,43 @@ def launch():
     tk.Button(batch_frame, text="🚀 Process All", bg="#009688", fg="white",
             command=lambda: start_batch_process(batch_entry.get("1.0", "end"))).pack(anchor="e", pady=(2, 0))
 
+    # Add the checkbox to the GUI
+    fast_transcription_var = tk.BooleanVar(value=False)
+    tk.Checkbutton(
+        batch_frame,
+        text="Fast Transcription",
+        variable=fast_transcription_var,
+        bg="#f5f5f5"
+    ).pack(anchor="w")
+
+    # Add the checkbox to the GUI
+    global skip_ai_image_var
+    skip_ai_image_var = tk.BooleanVar(value=False)
+    tk.Checkbutton(
+        batch_frame,
+        text="Skip AI Image Generation",
+        variable=skip_ai_image_var,
+        bg="#f5f5f5"
+    ).pack(anchor="w")
+
+    # Add a checkbox for "Open Play Books after generation"
+    open_play_books_var = tk.BooleanVar(value=False)
+    tk.Checkbutton(
+        batch_frame,
+        text="📖 Open Play Books after generation",
+        variable=open_play_books_var,
+        bg="#f5f5f5"
+    ).pack(anchor="w")
+
+    # Add a checkbox for "Upload to Google Drive"
+    upload_to_drive_var = tk.BooleanVar(value=True)
+    tk.Checkbutton(
+        batch_frame,
+        text="☁️ Upload to Google Drive",
+        variable=upload_to_drive_var,
+        bg="#f5f5f5"
+    ).pack(anchor="w")
+
     # ── Metadata frame ── #
     meta_container = tk.Frame(app, bg="#f5f5f5")
     meta_container.pack(fill="x", padx=8, pady=(6, 0))
@@ -493,12 +546,29 @@ def launch():
     content.grid_columnconfigure(1, weight=0)
     content.grid_rowconfigure(0, weight=1)
 
+    # Add a toggle button to collapse/expand the Markdown textbox
+
+    def toggle_markdown():
+        if text_frame.winfo_viewable():
+            text_frame.pack_forget()
+            toggle_markdown_btn.config(text="🔽 Show Markdown")
+        else:
+            text_frame.pack(fill="both", expand=True)
+            toggle_markdown_btn.config(text="🔼 Hide Markdown")
+
+    # Add the toggle button above the Markdown textbox
+    toggle_markdown_btn = tk.Button(content, text="🔽 Show Markdown", command=toggle_markdown, bg="#dddddd")
+    toggle_markdown_btn.grid(row=0, column=0, sticky="w", pady=(0, 4))
+
     # Text area on the left (shrinkable)
     text_frame = tk.Frame(content, bg="#f5f5f5")
     text_frame.grid(row=0, column=0, sticky="nsew")
     tk.Label(text_frame, text="Paste Markdown here ↓", bg="#f5f5f5").pack(anchor="w")
     txt_box = tk.Text(text_frame, wrap="word")
     txt_box.pack(fill="both", expand=True)
+
+    # Initially hide the Markdown textbox
+    text_frame.pack_forget()
 
     # Right panel (fixed size)
     right_panel = tk.Frame(content, bg="#f5f5f5", width=300)
@@ -552,30 +622,32 @@ def launch():
         status.config(text="⬇️  Downloading...", fg="blue")
 
         try:
-            print("[1] Calling download_audio()")
-            status.config(text="⬇️  Downloading...", fg="blue")
-            wav, tmpdir = download_audio(url)
-            print(f"[1✓] Audio downloaded → {wav}")
-        except Exception as e:
-            print(f"[1✗] Failed during download_audio: {e}")
-            status.config(text="❌ Download failed", fg="red")
-            return
+            if fast_transcription_var.get():
+                print("[1] Using Fast Transcription API")
+                video_id = re.search(r"(?:v=|be/|embed/|youtu.be/)([\w-]{11})", url).group(1)
+                transcript = YouTubeTranscriptApi.get_transcript(video_id)
+                transcript_text = "\n".join([entry['text'] for entry in transcript])
+                print(f"[1✓] Transcript length: {len(transcript_text)} chars")
+            else:
+                print("[1] Calling download_audio()")
+                status.config(text="⬇️  Downloading...", fg="blue")
+                wav, tmpdir = download_audio(url)
+                print(f"[1✓] Audio downloaded → {wav}")
 
-        try:
-            print("[2] Calling transcribe_wav()")
-            status.config(text="🗣️  Transcribing...", fg="blue")
-            transcript = transcribe_wav(wav)
-            shutil.rmtree(tmpdir, ignore_errors=True)  # cleanup after use
-            print(f"[2✓] Transcript length: {len(transcript)} chars")
+                print("[2] Calling transcribe_wav()")
+                status.config(text="🗣️  Transcribing...", fg="blue")
+                transcript_text = transcribe_wav(wav)
+                shutil.rmtree(tmpdir, ignore_errors=True)  # cleanup after use
+                print(f"[2✓] Transcript length: {len(transcript_text)} chars")
         except Exception as e:
-            print(f"[2✗] Failed during transcribe_wav: {e}")
+            print(f"[1✗] Failed during transcription: {e}")
             status.config(text="❌ Transcription failed", fg="red")
             return
 
         try:
             print("[3] Calling make_full_markdown_book()")
             status.config(text="📖 Generating Markdown...", fg="blue")
-            md = make_markdown_book_gemini(url, transcript)
+            md = make_markdown_book_gemini(url, transcript_text)
             print(f"[3✓] Markdown length: {len(md)} chars")
         except Exception as e:
             print(f"[3✗] Failed during Markdown generation: {e}")
@@ -633,11 +705,11 @@ def launch():
             status.config(text=f"✅ Processed {i}/{len(links)}", fg="green")
             
             # Wait for remaining time to hit 60 seconds
-            elapsed = time.time() - start_time
-            if elapsed < 60:
-                remaining = 60 - elapsed
-                print(f"🕐 Waiting {int(remaining)}s to respect cooldown...")
-                time.sleep(remaining)
+            # elapsed = time.time() - start_time
+            # if elapsed < 60:
+            #     remaining = 60 - elapsed
+            #     print(f"🕐 Waiting {int(remaining)}s to respect cooldown...")
+            #     time.sleep(remaining)
 
 
     def autofill(raw):
@@ -656,25 +728,29 @@ def launch():
 
     def generate_clicked():
         nonlocal text_color, stroke_color
-        
+
         raw = clean_markdown_fence(txt_box.get("1.0", "end"))
         if not raw:
             return messagebox.showwarning("Empty", "Paste or load text first!")
         autofill(raw)
-        if prompt_entry.get("1.0", "end").strip():
-            prompt = prompt_entry.get("1.0", "end").strip()
-        else:
-            try:
-                prompt, ai_fill, ai_stroke = generate_sd_prompt(raw)
 
-                # Override colors if provided by AI
-                text_color = ai_fill or DEFAULT_TEXT_COLOR
-                stroke_color = ai_stroke or DEFAULT_STROKE_COLOR
-                if not prompt or len(prompt) < 5:
-                    raise ValueError("Empty or weak AI prompt")
-            except Exception as e:
-                print(f"[AI Prompt Error] Falling back. Reason: {e}")
-                prompt = prompt_from_text(title_e.get(), raw)
+        if not skip_ai_image_var.get():
+            if prompt_entry.get("1.0", "end").strip():
+                prompt = prompt_entry.get("1.0", "end").strip()
+            else:
+                try:
+                    prompt, ai_fill, ai_stroke = generate_sd_prompt(raw)
+
+                    # Override colors if provided by AI
+                    text_color = ai_fill or DEFAULT_TEXT_COLOR
+                    stroke_color = ai_stroke or DEFAULT_STROKE_COLOR
+                    if not prompt or len(prompt) < 5:
+                        raise ValueError("Empty or weak AI prompt")
+                except Exception as e:
+                    print(f"[AI Prompt Error] Falling back. Reason: {e}")
+                    prompt = prompt_from_text(title_e.get(), raw)
+        else:
+            prompt = prompt_entry.get("1.0", "end").strip() or "a light gray gradient background"
 
         try:
             generate_cover(prompt, COVER_FN, title_e.get(), text_color, stroke_color)
@@ -695,6 +771,33 @@ def launch():
         try:
             markdown_to_epub(raw, cover_path=COVER_FN if os.path.exists(COVER_FN) else None, **meta)
             print("Done", f"📚 EPUB saved:\n{meta['out_path']}")
+
+            # Open Play Books and highlight the EPUB file if the checkbox is checked
+            if open_play_books_var.get():
+                try:
+                    # Open Google Play Books in the default browser
+                    webbrowser.open("https://play.google.com/books")
+                    print("[Play Books] Opened Google Play Books in browser.")
+
+                    # Highlight the generated EPUB file in the file explorer
+                    epub_path = meta['out_path']
+                    folder_path = os.path.dirname(os.path.abspath(epub_path))
+                    os.startfile(folder_path, 'explore')
+                    print(f"[File Explorer] Highlighted EPUB file: {epub_path}")
+                except Exception as e:
+                    print(f"[Error] Failed to open Play Books or highlight file: {e}")
+
+            # Upload to Google Drive if the checkbox is checked
+            if upload_to_drive_var.get():
+                try:
+                    epub_path = meta['out_path']
+                    result = subprocess.run(["gdrive", "upload", epub_path], capture_output=True, text=True)
+                    if result.returncode == 0:
+                        print(f"[Google Drive] Upload successful: {result.stdout.strip()}")
+                    else:
+                        print(f"[Google Drive] Upload failed: {result.stderr.strip()}")
+                except Exception as e:
+                    print(f"[Error] Failed to upload to Google Drive: {e}")
         except Exception as e:
             print("Error", str(e))
 
