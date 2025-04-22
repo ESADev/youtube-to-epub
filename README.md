@@ -1,4 +1,4 @@
-![Python](https://img.shields.io/badge/Python-3.9+-blue)
+![Python](https://img.shields.io/badge/Python-3.13+-blue)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
 > “Discipline equals freedom.”  
@@ -22,6 +22,8 @@ No overstimulation anymore. Just clean, value-focused, structured reading with a
 - ☁️ **Optional Google Drive upload**: Automatically uploads the generated EPUB to your Google Drive
 - 🔁 Includes batch processing: drop multiple links, get multiple books
 - 📖 **Play Books integration**: Automatically opens the EPUB in Google Play Books and highlights it in the file explorer
+- 🌐 **Translation Support**: Translate the transcript into any language before generating the book (default: Türkçe)
+- ✅ **Customizable Text Alignment**: Overlay text on the cover is now aligned to the left for a cleaner look
 
 ---
 
@@ -31,13 +33,14 @@ No overstimulation anymore. Just clean, value-focused, structured reading with a
 2. 🧲 Downloads audio via `yt-dlp` or fetches the transcript via **YouTube Transcript API** (Fast Transcription mode)
 3. 🧠 Transcribes it with **Whisper AI** (if not using Fast Transcription)
 4. 🧠 Sends the transcript to **Gemini (Google's AI)** to generate structured Markdown
-5. 🎨 Sends the text back to Gemini to create a cover image prompt + suitable colors
-6. 🖼️ Uses **Stable Diffusion XL Lightning** locally to generate the cover image, or generates a light gray gradient cover (Skip AI Image Generation mode)
-7. ✍️ Adds the title to the image with color contrast
-8. 📦 Converts everything to an EPUB file and saves it in the `Outputs/` folder
-9. ☁️ Optionally uploads the EPUB to Google Drive
-10. 📖 Optionally opens the EPUB in Google Play Books and highlights it in the file explorer
-11. ✅ Moves on to the next link, if any
+5. 🌐 Optionally translates the transcript into your chosen language using Gemini
+6. 🎨 Sends the text back to Gemini to create a cover image prompt + suitable colors
+7. 🖼️ Uses **Stable Diffusion XL Lightning** locally to generate the cover image, or generates a light gray gradient cover (Skip AI Image Generation mode)
+8. ✍️ Adds the title to the image with color contrast and left-aligned text
+9. 📦 Converts everything to an EPUB file and saves it in the `Outputs/` folder
+10. ☁️ Optionally uploads the EPUB to Google Drive
+11. 📖 Optionally opens the EPUB in Google Play Books and highlights it in the file explorer
+12. ✅ Moves on to the next link, if any
 
 ---
 
@@ -63,7 +66,7 @@ Put both inside a local folder (e.g., `models/`)
 
 ### 🔑 Google Gemini API Key
 
-This app uses **Gemini** for book structure and cover prompt generation.  
+This app uses **Gemini** for book structure, translation, and cover prompt generation.  
 You **must provide your own key**.
 
 #### Add it in a `.env` file:
@@ -108,6 +111,7 @@ yt2epub
 Then:
 - Paste one or more YouTube links into the input box
 - Optionally edit the title/author
+- Use the **Translate to** checkbox to translate the transcript into your desired language
 - Hit **"Process All"**
 - Let the AI cook 🧠🔥
 
@@ -136,6 +140,8 @@ Looks awesome on:
 - Gemini may throw occasional API limits — consider batching responsibly
 - **Fast Transcription mode**: Skips audio download and Whisper transcription, directly fetching the transcript via YouTube Transcript API (if available)
 - **Skip AI Image Generation mode**: Skips AI-based cover generation and uses a light gray gradient cover instead
+- **Translation Support**: Translate the transcript into any language before generating the book (default: Türkçe)
+- **Customizable Text Alignment**: Overlay text on the cover is now aligned to the left for a cleaner look
 - **Google Drive upload**: Requires `gdrive` CLI tool to be installed and authenticated
 - **Play Books integration**: Automatically opens the EPUB in Google Play Books and highlights it in the file explorer for easy drag-and-drop
 
@@ -148,6 +154,7 @@ Looks awesome on:
 - Book metadata (title, author, etc.) can be edited before conversion
 - Use the "Fast Transcription" checkbox for quicker processing when YouTube transcripts are available
 - Use the "Skip AI Image Generation" checkbox to save GPU resources and generate a simple gradient cover
+- Use the "Translate to" checkbox to translate the transcript into your desired language before processing
 - Enable or disable "Upload to Google Drive" and "Open Play Books after generation" based on your workflow
 
 ---

@@ -5,7 +5,7 @@ DEFAULT_PUBLISHER  = "Esadev"
 DEFAULT_LANGUAGE   = "en"
 DEFAULT_OUT_NAME   = "my_book"
 COVER_H, COVER_W   = 768, 512          # 3:2 vertical, tiny thumbnail size
-DEFAULT_TEXT_COLOR = "dimgray"     
+DEFAULT_TEXT_COLOR = "black"     
 DEFAULT_STROKE_COLOR = "white"    
 # ────────────────────────────────────── #
 
@@ -17,6 +17,12 @@ import google.generativeai as genai
 import torch
 import time
 import shutil
+import numpy as np
+import webbrowser
+import os
+import re
+import uuid
+import markdown2
 from tkinter import messagebox
 from tkinterdnd2 import TkinterDnD
 from ebooklib import epub
@@ -31,13 +37,13 @@ from safetensors.torch import load_file
 from PIL import ImageOps
 from dotenv import load_dotenv
 from youtube_transcript_api import YouTubeTranscriptApi
-import numpy as np
-import webbrowser
+from ebooklib import epub
+from slugify import slugify
 
 load_dotenv()
 
 genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
-gemini_model = genai.GenerativeModel("gemini-2.5-flash-preview-04-17")
+gemini_model = genai.GenerativeModel("gemini-2.5-pro-exp-03-25")
 
 # Load once & cache
 _sdxl_lightning_pipe = None
@@ -115,7 +121,7 @@ def download_audio(youtube_url: str) -> str:
     wav_path = str(Path(tmp) / next(p for p in os.listdir(tmp) if p.endswith(".wav") and "audio" in p))
     return wav_path, tmp  # Return both
 
-def transcribe_wav(wav_path: str) -> str:
+def transcribe_wav(wav_path: str, url: str) -> str:
     def run_model(model_name, device):
         cmd = ["python", "yt2epub/utils/whisper_worker.py", model_name, wav_path, device]
         result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8")
@@ -138,7 +144,13 @@ def transcribe_wav(wav_path: str) -> str:
                 return run_model("tiny", "cpu")
             except Exception as e3:
                 print(f"[Whisper CPU tiny Failed] {e3}")
-                raise RuntimeError("❌ All Whisper fallbacks failed")
+                try:
+                    print("Switched to fast transcription...")
+                    video_id = re.search(r"(?:v=|be/|embed/|youtu.be/)([\w-]{11})", url).group(1)
+                    transcript = YouTubeTranscriptApi.get_transcript(video_id)
+                    return "\n".join([entry['text'] for entry in transcript])
+                except Exception as e4:
+                    raise RuntimeError("❌ All Whisper fallbacks failed")
 
 def generate_sd_prompt(book_text: str) -> tuple[str, str, str]:
     truncated = book_text[:6000]
@@ -146,16 +158,16 @@ def generate_sd_prompt(book_text: str) -> tuple[str, str, str]:
     prompt = f"""You are an expert visual imagination assistant for book cover design.
 
 First, generate a short, vivid, and symbolic **image prompt** for an AI image generator based on the following book content. 
-Then, choose two suitable CSS-style hex colors for overlaying the book title:
+Then, choose two suitable python compatible colors (string versions, some examples are but not limited to: beige, darkgreen, darkslateblue, yellow...) for overlaying the book title:
 - One for the **text fill**
 - One for the **stroke outline**
 Fill color should be a light color and stroke color should be a dark color. And they should look natural on the image if applied to the book title.
 
 Rules:
-- The image prompt should be anime-style, pastel, or illustrated.
-- The image prompt should be less than 70 words long.
+- The image prompt should be in a book-cover-suitable style for example illustration, vector-art, minimalist, abstract. But, again, for example, professional photography or portrait style is not suitable for book covers. Be creative and choose a style that fits and represents the book content and a book cover.
+- The image prompt should be less than 65 words long.
 - Decide a specific color palette both with the image and the text colors.
-- DO NOT include female characters or any text elements in the image.
+- DO NOT include female characters or any text elements in the image. But you can include male characters, animals, structures, sceneries, and any other suitable elements.
 - Output only the following block, no commentary:
 
 ---
@@ -164,10 +176,10 @@ IMAGE PROMPT:
 <your image prompt here>
 
 TEXT FILL COLOR:
-<hex fill color like #ffffff>
+<python compatible fill color (be 100% sure it is compatible)>
 
 STROKE COLOR:
-<hex stroke color like #000000>
+<python compatible stroke color (be 100% sure it is compatible)>
 
 ---
 
@@ -237,13 +249,15 @@ Use headings consistently:
 
     ## (Heading 2) for chapters or main topic titles.
 
-    ### (Heading 3) for subtopics or extremely impactful sentences/quotes.
+    ### (Heading 3) for subtopics.
+    
+    Don't chapterize (Use headings) too frequently since it interrupts the flow of reading.
 
     Avoid skipping heading levels (don't jump directly from # to ###).
 
 Use plain paragraphs separated by a blank line for easy readability on eReaders. Keep paragraphs short and focused.
 
-Use bold (**bold**) and italic (*italic*) sparingly, only to emphasize particularly important words or phrases.
+Use bold (**bold**) and italic (*italic*) to emphasize particularly important words, phrases or sentences (decide yourself based on the level of impact).
 
 Insert a horizontal rule (---) to indicate visual breaks, scene transitions, or major shifts in topics clearly.
 
@@ -261,11 +275,13 @@ Keep the text complete and unabridged—no summaries, omissions, or cuts.
 
 If the transcript lacks clear sections, determine logical topics, subtopics, and categories yourself and structure the text accordingly with appropriate headings.
 
+Do **not** translate the text. Keep it in the original language as provided in the transcript.
+
 
 Deliver the entire transcript in one message (as long as necessary; don’t truncate).
 
 
-PurposeI’m on a full social‑media detox and prefer reading over watching. I will convert your Markdown directly to EPUB.
+Purpose: I’m on a full social‑media detox and prefer reading over watching. I will convert your Markdown directly to EPUB.
 
 
 Important
@@ -346,7 +362,7 @@ def generate_cover(prompt: str, path: str, title: str, text_color: str, stroke_c
 
     # Try a nicer font if available, else fall back to default PIL bitmap font
     try:
-        font = ImageFont.truetype("assets/Font.ttf", size=int(COVER_H * 0.1))
+        font = ImageFont.truetype("assets/Font.ttf", size=int(COVER_H * 0.075))
     except IOError:
         font = ImageFont.load_default()
 
@@ -367,16 +383,17 @@ def generate_cover(prompt: str, path: str, title: str, text_color: str, stroke_c
 
     # draw each wrapped line with white outline + black fill
     stroke = max(1, font.size // 25 + 1)          # ≈25 % of font size
+
+    # Align text to the left instead of centering
     for ln in lines:
         w = draw.textlength(ln, font)
-        x = (COVER_W - w) // 2
+        x = int(COVER_W * 0.125)  # Align text to the left with 10% padding
         draw.text((x, y), ln,
           font=font,
           fill=text_color,
           stroke_width=stroke,
           stroke_fill=stroke_color)
-        line_gap = 3      #  ≈ 33 % of font height
-        # or: line_gap = 6          #  fixed 6‑pixel gap
+        line_gap = 0      #  ≈ 33 % of font height
         y += line_h + line_gap
 
     # 3) Save & return ---------------------------------------------------------
@@ -391,59 +408,116 @@ def generate_light_gray_gradient_image(save_path: str):
     img.save(save_path)
     print(f"[Gradient] Light gray gradient image saved to {save_path}")
 
+def translate_text_with_gemini(input_text: str, target_language: str = "Türkçe") -> str:
+    """Translates the given text to the target language using Gemini."""
+    prompt = f"""Task  
+Translate the following text into {target_language}.
+
+Your goal is to make it sound like the original speaker was a **native speaker of the target language**, while fully preserving their **tone, personality, rhythm, and emotional impact**. Reflect the same style—whether it's casual, deep, humorous, intense, or calm. Don’t just convert words; translate the voice and intent.
+
+Preserve and adapt the **original paragraphing, punctuation, and formatting** naturally to fit the target language. Use sentence structures, phrasing, and punctuation that a native speaker would use to express the same thoughts authentically.
+
+Avoid robotic or overly literal translations. Do not polish or neutralize expressive phrasing.
+
+Return only the translated text. No extra explanations, headers, or formatting.
+
+--- BEGIN TEXT ---  
+{input_text}  
+--- END TEXT ---
+"""
+
+    try:
+        response = gemini_model.generate_content(prompt)
+        return response.text.strip()
+    except Exception as e:
+        print(f"[Gemini Error] {e}")
+        return ""
+
 # ─── EPUB builder ────────────────────────────────────────────────── #
 
 def markdown_to_epub(
-    raw_text,
+    raw_text: str,
     *,
-    title,
-    author,
-    publisher,
-    language,
-    identifier,
-    out_path,
-    cover_path=None,
-):
+    title: str,
+    author: str,
+    publisher: str,
+    language: str,
+    identifier: str = None,
+    out_path: str,
+    cover_path: str = None,
+) -> None:
+    """
+    Convert structured Markdown into an EPUB file with:
+      - # as book title metadata
+      - ## as chapters (one file each)
+      - ### as subheadings inside chapters
+      - Inline bold/italic, horizontal rules, tables, and code blocks
+    """
+    # --- 1) Prepare book metadata
     book = epub.EpubBook()
     book.set_identifier(identifier or str(uuid.uuid4()))
     book.set_title(title)
     book.set_language(language)
     book.add_author(author)
-    book.add_metadata("DC", "publisher", publisher)
+    book.add_metadata('DC', 'publisher', publisher)
 
+    # --- 2) Optional cover
     if cover_path and os.path.exists(cover_path):
-        with open(cover_path, "rb") as c:
-            book.set_cover("cover.png", c.read())
+        with open(cover_path, 'rb') as img_file:
+            book.set_cover(os.path.basename(cover_path), img_file.read())
 
-    chapters, cur_title, cur_body, cur_lvl = [], None, "", 1
+    # --- 3) Convert markdown to full HTML
+    html = markdown2.markdown(
+        raw_text,
+        extras=[
+            "fenced-code-blocks",
+            "tables",
+            "strike",
+            "underline",
+            "metadata",
+            "cuddled-lists",
+        ]
+    )
 
-    def flush():
-        nonlocal cur_title, cur_body, cur_lvl
-        if not cur_title:
-            return
-        tag = f"h{cur_lvl}"
+    # --- 4) Split into chapters at <h2>...</h2>
+    # Regex will keep the <h2> tags in the split result
+    parts = re.split(r'(?i)(<h2[^>]*>.*?</h2>)', html)
+
+    chapters = []
+    spine_items = []
+
+    # Iterate over pairs: header, content
+    for idx in range(1, len(parts), 2):
+        header_html = parts[idx]
+        body_html = parts[idx + 1] if (idx + 1) < len(parts) else ''
+
+        # Extract plain text title from header
+        chap_title = re.sub(r'<.*?>', '', header_html).strip()
+        # Compose chapter content
+        chap_content = f"{header_html}\n{body_html}"
+
+        # Create EpubHtml item
+        file_name = f"{slugify(chap_title)}.xhtml"
         chap = epub.EpubHtml(
-            title=cur_title,
-            file_name=f"{slugify(cur_title)}.xhtml",
-            content=f"<{tag}>{cur_title}</{tag}><p>{cur_body.strip().replace(chr(10), '</p><p>')}</p>",
+            title=chap_title,
+            file_name=file_name,
+            lang=language
         )
+        chap.content = chap_content
+
         book.add_item(chap)
         chapters.append(chap)
-        cur_title, cur_body = None, ""
+        spine_items.append(chap)
 
-    for ln in raw_text.splitlines() + ["# END"]:
-        m = HEADER_RE.match(ln.strip())
-        if m:
-            flush()
-            cur_lvl = len(m.group(1))
-            cur_title = m.group(2).strip()
-        else:
-            cur_body += ln + "\n"
-    flush()
+    # --- 5) Build table of contents and spine
+    book.toc = chapters
+    book.spine = ['nav'] + spine_items
 
-    book.toc, book.spine = chapters, ["nav"] + chapters
+    # --- 6) Add navigation files
     book.add_item(epub.EpubNcx())
     book.add_item(epub.EpubNav())
+
+    # --- 7) Write out the EPUB
     epub.write_epub(out_path, book)
 
 # ─── GUI ─────────────────────────────────────────────────────────── #
@@ -501,6 +575,23 @@ def launch():
         variable=upload_to_drive_var,
         bg="#f5f5f5"
     ).pack(anchor="w")
+
+    # Add a checkbox and textbox for translation
+    translate_var = tk.BooleanVar(value=False)
+    translate_frame = tk.Frame(batch_frame, bg="#f5f5f5")
+    translate_frame.pack(anchor="w", pady=(4, 0))
+
+    translate_checkbox = tk.Checkbutton(
+        translate_frame,
+        text="Translate to",
+        variable=translate_var,
+        bg="#f5f5f5"
+    )
+    translate_checkbox.pack(side="left")
+
+    translate_textbox = tk.Entry(translate_frame, width=10)
+    translate_textbox.insert(0, "Türkçe")
+    translate_textbox.pack(side="left", padx=(4, 0))
 
     # ── Metadata frame ── #
     meta_container = tk.Frame(app, bg="#f5f5f5")
@@ -636,12 +727,23 @@ def launch():
 
                 print("[2] Calling transcribe_wav()")
                 status.config(text="🗣️  Transcribing...", fg="blue")
-                transcript_text = transcribe_wav(wav)
+                transcript_text = transcribe_wav(wav, url)
                 shutil.rmtree(tmpdir, ignore_errors=True)  # cleanup after use
                 print(f"[2✓] Transcript length: {len(transcript_text)} chars")
         except Exception as e:
             print(f"[1✗] Failed during transcription: {e}")
             status.config(text="❌ Transcription failed", fg="red")
+            return
+
+        try:
+            if translate_var.get():
+                target_language = translate_textbox.get().strip() or "Türkçe"
+                print(f"[2.5] Translating to {target_language}")
+                transcript_text = translate_text_with_gemini(transcript_text, target_language)
+                print(f"[2.5✓] Translation complete. Length: {len(transcript_text)} chars")
+        except Exception as e:
+            print(f"[2.5✗] Failed during translation: {e}")
+            status.config(text="❌ Translation failed", fg="red")
             return
 
         try:
@@ -791,7 +893,7 @@ def launch():
             if upload_to_drive_var.get():
                 try:
                     epub_path = meta['out_path']
-                    result = subprocess.run(["gdrive", "upload", epub_path], capture_output=True, text=True)
+                    result = subprocess.run(["gdrive", "files", "upload", epub_path], capture_output=True, text=True)
                     if result.returncode == 0:
                         print(f"[Google Drive] Upload successful: {result.stdout.strip()}")
                     else:
