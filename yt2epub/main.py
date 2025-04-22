@@ -6,7 +6,7 @@ DEFAULT_LANGUAGE   = "en"
 DEFAULT_OUT_NAME   = "my_book"
 COVER_H, COVER_W   = 768, 512          # 3:2 vertical, tiny thumbnail size
 DEFAULT_TEXT_COLOR = "black"     
-DEFAULT_STROKE_COLOR = "white"    
+DEFAULT_STROKE_COLOR = "white"
 # ────────────────────────────────────── #
 
 import threading
@@ -528,6 +528,18 @@ def launch():
     app.geometry("900x600")  # wider window to accommodate side preview
     app.configure(bg="#f5f5f5")
     
+    # Ensure all textboxes accept UTF-8 input and work with different language keyboards
+    app.tk.call('encoding', 'system', 'utf-8')
+
+    # Update all Entry and Text widgets to handle UTF-8 properly
+    def configure_textbox(widget):
+        widget.configure(exportselection=True)
+
+    # Apply configuration to existing textboxes
+    configure_textbox(batch_entry)
+    configure_textbox(txt_box)
+    configure_textbox(translate_textbox)
+
     # Additional batch input field
     batch_frame = tk.Frame(app, bg="#f5f5f5")
     batch_frame.pack(fill="x", padx=8, pady=(4, 4))
@@ -893,7 +905,8 @@ def launch():
             if upload_to_drive_var.get():
                 try:
                     epub_path = meta['out_path']
-                    result = subprocess.run(["gdrive", "files", "upload", epub_path], capture_output=True, text=True)
+                    folder_id=os.getenv("DRIVE_FOLDER_ID")
+                    result = subprocess.run(["gdrive", "files", "upload", "--parent", f"{folder_id}", epub_path], capture_output=True, text=True)
                     if result.returncode == 0:
                         print(f"[Google Drive] Upload successful: {result.stdout.strip()}")
                     else:
